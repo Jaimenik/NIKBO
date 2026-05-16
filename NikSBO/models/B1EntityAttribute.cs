@@ -8,7 +8,7 @@ namespace NikSBO.models
 {
     /// <summary>
     /// Atributo que asocia una clase del modelo con su endpoint del Service Layer.
-    /// Lo usa <see cref="NikSBO.http.B1Client.Query{T}"/> para resolver la URL
+    /// Lo usa <see cref="NikSBO.http.B1Client.Query{T}()"/> para resolver la URL
     /// sin tener que pasar el nombre del recurso en cada llamada.
     /// <example>
     /// <code>

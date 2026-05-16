@@ -39,7 +39,7 @@ namespace NikSBO.Query
 
         /// <summary>
         /// Crea un query builder para el endpoint indicado. Lo normal es instanciarlo
-        /// indirectamente mediante <see cref="NikSBO.http.B1Client.Query{T}"/>.
+        /// indirectamente mediante <see cref="NikSBO.http.B1Client.Query{T}()"/>.
         /// </summary>
         /// <param name="b1">Cliente B1 ya autenticado. Las peticiones se canalizan por su flujo de auth (re-login automático y retry 401).</param>
         /// <param name="endpoint">Ruta relativa completa, ej. <c>b1s/v1/BusinessPartners</c>.</param>
@@ -95,14 +95,18 @@ namespace NikSBO.Query
             return Where(field, BOCondition.Equals, value);
         }
 
-        #endregion 
+        #endregion
 
+        /// <summary>Ordena ascendentemente por el campo indicado (<c>$orderby field asc</c>).</summary>
+        /// <param name="field">Nombre del campo tal como lo expone el Service Layer.</param>
         public B1Query<T> OrderBy(string field)
         {
             this.orderBy = $"{field} asc";
             return this;
         }
 
+        /// <summary>Ordena descendentemente por el campo indicado (<c>$orderby field desc</c>).</summary>
+        /// <param name="field">Nombre del campo tal como lo expone el Service Layer.</param>
         public B1Query<T> OrderByDesc(string field)
         {
             this.orderBy = $"{field} desc";
@@ -181,6 +185,9 @@ namespace NikSBO.Query
         }
 
 
+        /// <summary>
+        /// Devuelve el número total de registros que cumplen los filtros usando <c>$count</c>.
+        /// </summary>
         public async Task<int> CountAsync()
         {
             var response = await _b1.ExecuteAsync(http => http.GetAsync(BuildUrl(true)));

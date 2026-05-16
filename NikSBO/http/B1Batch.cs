@@ -8,10 +8,19 @@ using NikSBO.Exceptions;
 
 namespace NikSBO.http
 {
+    /// <summary>
+    /// Acumula varias operaciones (POST/PATCH/DELETE) y las envía juntas como una transacción
+    /// atómica al endpoint <c>$batch</c> del Service Layer. SAP envuelve las operaciones en un
+    /// changeset, así que si una falla todas las demás se revierten.
+    /// </summary>
     public class B1Batch
     {
         private B1Client _b1;
 
+        /// <summary>Operación pendiente dentro de un batch.</summary>
+        /// <param name="Method">Verbo HTTP: <c>POST</c>, <c>PATCH</c> o <c>DELETE</c>.</param>
+        /// <param name="Endpoint">Endpoint relativo (sin el prefijo <c>b1s/v1/</c>).</param>
+        /// <param name="Body">Cuerpo a serializar a JSON, o <c>null</c> para DELETE.</param>
         public record BatchOperation(string Method, string Endpoint, object? Body);
         private List<BatchOperation> _operations = new List<BatchOperation>();
 
@@ -19,27 +28,43 @@ namespace NikSBO.http
         /// Resultado de una operación dentro de un batch. <see cref="Body"/> es el JSON crudo que
         /// devolvió SAP para esa operación (la entidad creada, el error, etc.) o null si no hubo cuerpo.
         /// </summary>
+        /// <param name="StatusCode">Código HTTP que SAP devolvió para esta operación.</param>
+        /// <param name="Body">JSON crudo del cuerpo de respuesta, o <c>null</c> si SAP no devolvió cuerpo.</param>
         public record BatchResult(int StatusCode, string? Body)
         {
+            /// <summary>Atajo: <c>true</c> si <see cref="StatusCode"/> está en el rango 200-299.</summary>
             public bool IsSuccess => StatusCode >= 200 && StatusCode < 300;
         }
 
+        /// <summary>
+        /// Crea un nuevo batch ligado a un <see cref="B1Client"/>. Lo normal es instanciarlo
+        /// vía <see cref="B1Client.CreateBatch"/>.
+        /// </summary>
+        /// <param name="b1">Cliente B1 ya autenticado por el que se enviará el batch.</param>
         public B1Batch(B1Client b1)
         {
             this._b1 = b1;
 
         }
 
+        /// <summary>Encola un POST contra el endpoint indicado.</summary>
+        /// <param name="endpoint">Endpoint relativo, ej. <c>"BusinessPartners"</c>.</param>
+        /// <param name="body">Cuerpo a serializar a JSON.</param>
         public void Post(string endpoint, object body)
         {
             _operations.Add(new BatchOperation("POST", endpoint, body));
         }
 
+        /// <summary>Encola un PATCH (actualización parcial) contra el endpoint indicado.</summary>
+        /// <param name="endpoint">Endpoint relativo con la clave, ej. <c>"BusinessPartners('C001')"</c>.</param>
+        /// <param name="body">Cuerpo a serializar a JSON con los campos a actualizar.</param>
         public void Patch(string endpoint, object body)
         {
             _operations.Add(new BatchOperation("PATCH", endpoint, body));
         }
 
+        /// <summary>Encola un DELETE contra el endpoint indicado.</summary>
+        /// <param name="endpoint">Endpoint relativo con la clave a borrar, ej. <c>"BusinessPartners('C001')"</c>.</param>
         public void Delete(string endpoint)
         {
             _operations.Add(new BatchOperation("DELETE", endpoint, null));

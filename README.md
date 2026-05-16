@@ -14,13 +14,23 @@ A C# / .NET 8 SDK for the **SAP Business One Service Layer**. Built so you don't
 
 ## Installation
 
-There's no NuGet package yet. Add the project as a reference:
+Install from NuGet:
+
+```bash
+dotnet add package NikSBO
+```
+
+Or pin a specific version:
+
+```bash
+dotnet add package NikSBO --version 0.1.0
+```
+
+To work from source instead, clone the repo and open `NikSBO.slnx`, or reference the project directly:
 
 ```bash
 dotnet add reference ../NikSBO/NikSBO.csproj
 ```
-
-Or clone the repo and open `NikSBO.slnx`.
 
 ---
 
@@ -432,13 +442,11 @@ finally
 
 ## Known limitations
 
-See [`TODO.md`](TODO.md) for the full backlog. The highlights:
-
 - No `CancellationToken` on `*Async` methods yet
 - Amounts on marketing documents are `double`, not `decimal` — watch out for precision loss
 - The query builder doesn't have `Skip` / `$expand` / `$search`
 - `SqlAsync` doesn't parameterize values (injection risk if you concatenate untrusted input)
-- No NuGet package, no `IServiceCollection` integration for DI
+- No `IServiceCollection` integration for DI yet
 
 ---
 

@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/Elementos de la solución/">
+    <File Path="TODO.md" />
+  </Folder>
+  <Project Path="NikSBO/NikSBO.csproj" />
+</Solution>

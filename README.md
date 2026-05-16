@@ -129,20 +129,20 @@ Useful for UDOs (user-defined objects) or any resource you don't have a model fo
 
 ```csharp
 // GET against a UDO
-var route = await client.GetByEndpointAsync<JsonElement>("LSI_RUTAS('R001')");
+var route = await client.GetByEndpointAsync<JsonElement>("MY_UDO('R001')");
 
 // POST
-await client.PostByEndpointAsync<JsonElement>("LSI_RUTAS", new
+await client.PostByEndpointAsync<JsonElement>("MY_UDO", new
 {
     Code = "R002",
     Name = "North Route"
 });
 
 // PATCH
-await client.PatchByEndpointAsync("LSI_RUTAS('R002')", new { Name = "North Route (edited)" });
+await client.PatchByEndpointAsync("MY_UDO('R002')", new { Name = "North Route (edited)" });
 
 // DELETE
-await client.DeleteByEndpointAsync("LSI_RUTAS('R002')");
+await client.DeleteByEndpointAsync("MY_UDO('R002')");
 ```
 
 The `b1s/v1/` prefix is added automatically: `"BusinessPartners"` and `"b1s/v1/BusinessPartners"` both work.
@@ -168,7 +168,7 @@ var activeCustomers = await client
 
 ```csharp
 var routes = await client
-    .Query<JsonElement>("LSI_RUTAS")
+    .Query<JsonElement>("MY_UDO")
     .Where("Code", "R001")
     .GetAsync();
 ```
@@ -202,7 +202,7 @@ using NikSBO.Enums;
 
 var bps = await client.Query<BusinessPartner>()
     .Where("CardType", BOCondition.Equals, "cCustomer")
-    .Where("U_LSI_RUTA", BOCondition.Equals, "R001") // UDF
+    .Where("U_MY_FIELD", BOCondition.Equals, "R001") // UDF
     .GetAsync();
 ```
 
@@ -308,7 +308,7 @@ Any JSON property that isn't bound to a strong-typed property falls into `Extens
 
 ```csharp
 var bp = await client.GetAsync<BusinessPartner>("C30000");
-string?  route   = bp.GetUDF<string>("U_LSI_RUTA");
+string?  route   = bp.GetUDF<string>("U_MY_FIELD");
 decimal? balance = bp.GetUDF<decimal>("U_AVAILABLE_BALANCE");
 ```
 
@@ -318,7 +318,7 @@ To write UDFs in POST/PATCH, just include them in the body (an anonymous type wo
 await client.PatchAsync<BusinessPartner>("C30000", new
 {
     CardName   = "Acme LLC",
-    U_LSI_RUTA = "R002"
+    U_MY_FIELD = "R002"
 });
 ```
 
@@ -329,7 +329,7 @@ Annotate with `[B1Entity("ServiceLayerEndpoint")]` and inherit from `B1Model` if
 ```csharp
 using NikSBO.models;
 
-[B1Entity("LSI_RUTAS")]
+[B1Entity("MY_UDO")]
 public class Route : B1Model
 {
     public string Code { get; set; } = "";

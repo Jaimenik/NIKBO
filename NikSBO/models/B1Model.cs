@@ -24,7 +24,7 @@ namespace NikSBO.models
         /// o <c>default</c> si el campo no viene en la respuesta.
         /// </summary>
         /// <typeparam name="T">Tipo al que deserializar el valor (string, int, decimal, DateTime...).</typeparam>
-        /// <param name="name">Nombre del UDF tal como lo expone SAP (ej. <c>U_LSI_RUTA</c>).</param>
+        /// <param name="name">Nombre del UDF tal como lo expone SAP (ej. <c>U_MY_FIELD</c>).</param>
         public T? GetUDF<T>(string name)
         {
             if (ExtensionData != null && ExtensionData.TryGetValue(name, out var value))

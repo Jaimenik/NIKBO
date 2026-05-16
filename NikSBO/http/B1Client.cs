@@ -266,7 +266,7 @@ namespace NikSBO.http
         /// Abre un query builder OData contra un endpoint manual. Útil para UDOs o recursos sin modelo.
         /// </summary>
         /// <typeparam name="T">Tipo al que deserializar cada elemento del array <c>value</c>.</typeparam>
-        /// <param name="endpoint">Endpoint relativo, ej. <c>"LSI_RUTAS"</c>.</param>
+        /// <param name="endpoint">Endpoint relativo, ej. <c>"MY_UDO"</c>.</param>
         public B1Query<T> Query<T>(string endpoint)
         {
             if (!endpoint.StartsWith("b1s/v1/"))

@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="NikSBO/NikSBO.csproj" />
+  <Project Path="NikSBO.Tests/NikSBO.Tests.csproj" />
   <Project Path="Test/Test.csproj" Id="793324fd-1f4e-4caf-ac92-2c1e1ec3626b" />
 </Solution>

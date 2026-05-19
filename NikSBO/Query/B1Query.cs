@@ -255,7 +255,7 @@ namespace NikSBO.Query
             return int.Parse(raw);
         }
 
-        private string BuildUrl(bool count = false)
+        internal string BuildUrl(bool count = false)
         {
 
             var url = count ? endpoint + "/$count" : endpoint;

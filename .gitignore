@@ -483,3 +483,9 @@ $RECYCLE.BIN/
 
 appsettings.json
 TODO.md
+
+# Local sandbox project (not part of the SDK)
+Test/
+
+# Claude Code working dir
+.claude/

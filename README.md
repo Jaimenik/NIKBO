@@ -76,7 +76,25 @@ var client = new B1Client(new B1Options
 });
 ```
 
-> Heads up: the client **does not validate the Service Layer's TLS certificate** (SAP usually ships a self-signed one). For production with a trusted certificate this will need to be made configurable.
+### TLS certificate validation
+
+By default the client validates the Service Layer's TLS certificate against the standard chain of trust. SAP B1 on-prem usually ships a **self-signed certificate**, so you'll get connection errors unless you either:
+
+- Install the SL certificate in the machine's trust store, **or**
+- Opt into accepting any certificate via `B1Options.AcceptAnyServerCertificate`:
+
+```csharp
+var client = new B1Client(new B1Options
+{
+    ServerUrl = "https://sap.mycompany.local:50000/",
+    CompanyDb = "SBODemoUS",
+    Username  = "manager",
+    Password  = "********",
+    AcceptAnyServerCertificate = true   // self-signed cert on internal network
+});
+```
+
+> Only enable this flag over a trusted network (LAN, VPN). Over Internet, public WiFi or unsegmented networks it opens the door to MITM attacks: an attacker can present their own certificate, read credentials and tamper with data in transit.
 
 ---
 
@@ -523,7 +541,6 @@ In Visual Studio, open `NikSBO.slnx` and run **Test → Test Explorer**.
 - The query builder doesn't have `Skip` / `$expand` / `$search`
 - `SqlAsync` doesn't parameterize values (injection risk if you concatenate untrusted input)
 - No `IServiceCollection` integration for DI yet
-- The Service Layer's TLS certificate is **not validated** — needs to become configurable before production use against a trusted certificate
 
 ---
 

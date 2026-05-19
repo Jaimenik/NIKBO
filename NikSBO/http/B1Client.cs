@@ -48,7 +48,7 @@ namespace NikSBO.http
             if (_auth is not null && !_auth.IsExpired())
                 return;
 
-            _auth = new Auth(_options.ServerUrl);
+            _auth = new Auth(_options.ServerUrl, _options.AcceptAnyServerCertificate);
             await _auth.Login(_options.Username, _options.Password, _options.CompanyDb, cancellationToken);
             this._client = _auth.HttpClient;
         }

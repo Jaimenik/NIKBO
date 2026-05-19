@@ -24,5 +24,18 @@ namespace NikSBO.models
 
         /// <summary>Contraseña del usuario.</summary>
         public string Password { get; set; }
+
+        /// <summary>
+        /// Si <c>true</c>, acepta cualquier certificado TLS del Service Layer sin validarlo.
+        /// Típico en SAP B1 on-prem con certificado autofirmado o vencido. Default: <c>false</c>
+        /// (validación estricta de cadena de confianza).
+        /// <para>
+        /// <b>Sólo actívalo si la conexión va por una red de confianza (LAN corporativa, VPN).</b>
+        /// Sobre Internet, WiFi pública o redes no segmentadas abre la puerta a ataques MITM:
+        /// un atacante puede presentar su propio certificado, leer credenciales y modificar
+        /// datos en tránsito.
+        /// </para>
+        /// </summary>
+        public bool AcceptAnyServerCertificate { get; set; } = false;
     }
 }

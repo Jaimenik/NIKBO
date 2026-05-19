@@ -52,19 +52,24 @@ namespace NikSBO
 
 
         /// <summary>
-        /// Crea la infraestructura HTTP (cookie container, handler que ignora el certificado y
-        /// <see cref="HttpClient"/>) apuntando a la URL base del Service Layer.
+        /// Crea la infraestructura HTTP (cookie container, handler y <see cref="HttpClient"/>)
+        /// apuntando a la URL base del Service Layer.
         /// </summary>
         /// <param name="uri">URL base del Service Layer (incluyendo esquema y puerto).</param>
-        public Auth(string uri)
+        /// <param name="acceptAnyServerCertificate">
+        /// Si <c>true</c>, no valida el certificado TLS del Service Layer (útil con SAP B1 on-prem
+        /// y certificado autofirmado). Default <c>false</c>: cadena de confianza estándar.
+        /// </param>
+        public Auth(string uri, bool acceptAnyServerCertificate = false)
         {
             _cookies = new CookieContainer();
             _handler = new HttpClientHandler
             {
                 UseCookies = true,
-                CookieContainer = _cookies,
-                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                CookieContainer = _cookies
             };
+            if (acceptAnyServerCertificate)
+                _handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
             _client = new HttpClient(_handler)
             {
                 BaseAddress = new Uri(uri)

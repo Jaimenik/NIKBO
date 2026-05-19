@@ -75,7 +75,8 @@ namespace NikSBO.http
         /// en que se añadieron. Recuerda: las operaciones van dentro de un changeset, así que SAP las
         /// trata como una transacción atómica — si una falla, las demás se revierten.
         /// </summary>
-        public async Task<List<BatchResult>> SubmitAsync()
+        /// <param name="cancellationToken">Token para cancelar el envío del batch.</param>
+        public async Task<List<BatchResult>> SubmitAsync(CancellationToken cancellationToken = default)
         {
             var sb = new StringBuilder();
 
@@ -107,20 +108,20 @@ namespace NikSBO.http
 
             var bodyText = sb.ToString();
 
-            var response = await _b1.ExecuteAsync(http =>
+            var response = await _b1.ExecuteAsync((http, ct) =>
             {
                 var content = new StringContent(bodyText, Encoding.UTF8);
                 content.Headers.Remove("Content-Type");
                 content.Headers.TryAddWithoutValidation("Content-Type", "multipart/mixed; boundary=batch_boundary");
-                return http.PostAsync("/b1s/v1/$batch", content);
-            });
+                return http.PostAsync("/b1s/v1/$batch", content, ct);
+            }, cancellationToken);
 
             // Si el sobre exterior peta (auth, server caído…), hay que tirar excepción —
             // ya no hay un multipart útil dentro.
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
 
-            var rawResponse = await response.Content.ReadAsStringAsync();
+            var rawResponse = await response.Content.ReadAsStringAsync(cancellationToken);
 
             return ParseBatchResponse(response.Content.Headers.ContentType?.Parameters
                                           .FirstOrDefault(p => p.Name == "boundary")?.Value,

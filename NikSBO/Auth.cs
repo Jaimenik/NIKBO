@@ -79,17 +79,18 @@ namespace NikSBO
         /// <param name="username">Usuario.</param>
         /// <param name="password">Contraseña.</param>
         /// <param name="companyDB">Base de datos de la empresa.</param>
-        public async Task Login(string username, string password, string companyDB)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task Login(string username, string password, string companyDB, CancellationToken cancellationToken = default)
         {
             var credenciales = new LoginRequest(username, password, companyDB);
             var json = System.Text.Json.JsonSerializer.Serialize(credenciales);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await _client.PostAsync("/b1s/v1/Login", content);
+            var response = await _client.PostAsync("/b1s/v1/Login", content, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
 
-            var data = await response.Content.ReadFromJsonAsync<LoginResponse>();
+            var data = await response.Content.ReadFromJsonAsync<LoginResponse>(cancellationToken);
             _sessionId = data!.SessionId;
             _sessionTimeout = data.SessionTimeout;
             _version = data.Version;
@@ -104,11 +105,12 @@ namespace NikSBO
         /// cookies locales. Aunque el servidor responda con error, las cookies y el estado de
         /// sesión local se descartan igualmente.
         /// </summary>
-        public async Task Logout()
+        /// <param name="cancellationToken">Token para cancelar la petición en curso. El estado local se limpia igualmente aunque se cancele.</param>
+        public async Task Logout(CancellationToken cancellationToken = default)
         {
             try
             {
-                var response = await _client.PostAsync("/b1s/v1/Logout", null);
+                var response = await _client.PostAsync("/b1s/v1/Logout", null, cancellationToken);
                 if (!response.IsSuccessStatusCode)
                     throw await B1Exception.FromResponseAsync(response);
             }

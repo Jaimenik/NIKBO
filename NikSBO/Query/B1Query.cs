@@ -197,40 +197,43 @@ namespace NikSBO.Query
         /// Construye la URL con los parámetros OData acumulados, hace la petición GET (máximo 20 registros)
         /// y devuelve la lista deserializada. Lanza <see cref="B1Exception"/> si SAP responde con error.
         /// </summary>
-        public async Task<List<T>> GetAsync()
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task<List<T>> GetAsync(CancellationToken cancellationToken = default)
         {
-            var response = await _b1.ExecuteAsync(http => http.GetAsync(BuildUrl(false)));
+            var response = await _b1.ExecuteAsync((http, ct) => http.GetAsync(BuildUrl(false), ct), cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
-            var data = (await response.Content.ReadFromJsonAsync<ODataResponse<T>>())!;
+            var data = (await response.Content.ReadFromJsonAsync<ODataResponse<T>>(cancellationToken))!;
             return data.value;
 
         }
         /// <summary>
         /// Lo mismo que GetAsync pero devuelve todos los registros
         /// </summary>
+        /// <param name="cancellationToken">Token para cancelar la petición. Se chequea entre páginas para abortar la paginación.</param>
         /// <returns></returns>
-        public async Task<List<T>> GetAllAsync()
+        public async Task<List<T>> GetAllAsync(CancellationToken cancellationToken = default)
         {
-            var response = await _b1.ExecuteAsync(http => http.GetAsync(BuildUrl(false)));
+            var response = await _b1.ExecuteAsync((http, ct) => http.GetAsync(BuildUrl(false), ct), cancellationToken);
 
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
 
 
-            var rawJson = await response.Content.ReadAsStringAsync();
+            var rawJson = await response.Content.ReadAsStringAsync(cancellationToken);
             var doc = JsonDocument.Parse(rawJson);
             var items = doc.RootElement.GetProperty("value").Deserialize<List<T>>();
 
             while (doc.RootElement.TryGetProperty("odata.nextLink", out var nextLink))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var nextUrl = "b1s/v1/" + nextLink.GetString();
-                response = await _b1.ExecuteAsync(http => http.GetAsync(nextUrl));
+                response = await _b1.ExecuteAsync((http, ct) => http.GetAsync(nextUrl, ct), cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                     throw await B1Exception.FromResponseAsync(response);
 
-                rawJson = await response.Content.ReadAsStringAsync();
+                rawJson = await response.Content.ReadAsStringAsync(cancellationToken);
                 doc = JsonDocument.Parse(rawJson);
                 var pageItems = doc.RootElement.GetProperty("value").Deserialize<List<T>>();
 
@@ -246,12 +249,13 @@ namespace NikSBO.Query
         /// <summary>
         /// Devuelve el número total de registros que cumplen los filtros usando <c>$count</c>.
         /// </summary>
-        public async Task<int> CountAsync()
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task<int> CountAsync(CancellationToken cancellationToken = default)
         {
-            var response = await _b1.ExecuteAsync(http => http.GetAsync(BuildUrl(true)));
+            var response = await _b1.ExecuteAsync((http, ct) => http.GetAsync(BuildUrl(true), ct), cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
-            var raw = await response.Content.ReadAsStringAsync();
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
             return int.Parse(raw);
         }
 

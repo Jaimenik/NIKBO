@@ -1,6 +1,6 @@
 # NikSBO
 
-A C# / .NET 8 SDK for the **SAP Business One Service Layer**. Built so you don't have to fight SAP's OData API by hand: login, typed CRUD, a fluent query builder (with LINQ), transactional batches, raw SQL and UDF support out of the box.
+A C# / .NET 8 SDK for the **SAP Business One Service Layer**. Built so you don't have to fight SAP's OData API by hand: login with auto-renewal, typed CRUD, a fluent query builder (with LINQ), transactional batches, raw SQL, UDF support and `CancellationToken` on every async call.
 
 ---
 
@@ -100,6 +100,49 @@ if (client.IsExpired(TimeSpan.FromMinutes(1)))
     await client.Login();
 
 DateTimeOffset? expiresAt = client.ExpiresAt;
+```
+
+---
+
+## Cancellation
+
+Every async method (`Login`, `Logout`, `GetAsync`, `PostAsync`, `Query<T>.GetAsync`, `B1Batch.SubmitAsync`, `SqlAsync`, …) accepts an optional `CancellationToken` as the last parameter:
+
+```csharp
+using var cts = new CancellationTokenSource();
+cts.CancelAfter(TimeSpan.FromSeconds(5));   // hard timeout
+
+try
+{
+    var customers = await client
+        .Query<BusinessPartner>()
+        .Where(bp => bp.CardType == "cCustomer")
+        .GetAsync(cts.Token);
+}
+catch (OperationCanceledException)
+{
+    // cancelled by timeout or by user
+}
+```
+
+In ASP.NET Core, propagate the request's token so a disconnected client aborts the SAP call instead of leaving a thread waiting:
+
+```csharp
+public async Task<IActionResult> Get(CancellationToken ct)
+{
+    var bps = await _client.Query<BusinessPartner>().GetAsync(ct);
+    return Ok(bps);
+}
+```
+
+`GetAllAsync` also checks the token **between pages**, so a long pagination walk stops promptly.
+
+For `ExecuteAsync` (raw HTTP escape hatch), the delegate now receives the token so you can pass it to your own call:
+
+```csharp
+var response = await client.ExecuteAsync(
+    (http, ct) => http.GetAsync("b1s/v1/SomeEndpoint", ct),
+    cancellationToken: ct);
 ```
 
 ---
@@ -220,13 +263,29 @@ Available operators (`BOCondition`): `Equals`, `NotEquals`, `GreaterThan`, `Less
 
 ### Select, Top, OrderBy
 
+`Select` supports three styles. Mix and match as you prefer:
+
 ```csharp
-var list = await client.Query<Item>()
+// 1) Strings — handy for dynamic field names, UDFs, or unmodeled endpoints
+var a = await client.Query<Item>()
     .Select("ItemCode", "ItemName", "PriceList")
+    .Top(100).GetAsync();
+
+// 2) Individual lambdas
+var b = await client.Query<Item>()
+    .Select(i => i.ItemCode, i => i.ItemName)
+    .Top(100).GetAsync();
+
+// 3) Anonymous type — most idiomatic when projecting several fields
+var c = await client.Query<Item>()
+    .Select(i => new { i.ItemCode, i.ItemName, i.PriceList })
     .OrderByDesc("ItemCode")
-    .Top(100)
-    .GetAsync();
+    .Top(100).GetAsync();
 ```
+
+The lambda variants give you **compile-time safety**: rename a property in the model and the call won't compile. The string variant only fails at runtime against SAP.
+
+> Tuple literals (`i => (i.A, i.B)`) are **not** valid here — expression trees in C# don't support them (CS8143). Use the anonymous type form instead.
 
 ### Automatic pagination
 
@@ -446,13 +505,25 @@ finally
 
 ---
 
+## Running the tests
+
+The repo ships a `NikSBO.Tests` project (xUnit) covering the OData expression translator and the query builder's URL generation. They run **offline** in milliseconds — no Service Layer needed:
+
+```bash
+dotnet test
+```
+
+In Visual Studio, open `NikSBO.slnx` and run **Test → Test Explorer**.
+
+---
+
 ## Known limitations
 
-- No `CancellationToken` on `*Async` methods yet
 - Amounts on marketing documents are `double`, not `decimal` — watch out for precision loss
 - The query builder doesn't have `Skip` / `$expand` / `$search`
 - `SqlAsync` doesn't parameterize values (injection risk if you concatenate untrusted input)
 - No `IServiceCollection` integration for DI yet
+- The Service Layer's TLS certificate is **not validated** — needs to become configurable before production use against a trusted certificate
 
 ---
 

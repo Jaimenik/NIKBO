@@ -42,30 +42,33 @@ namespace NikSBO.http
         /// <summary>
         /// Hace login contra el Service Layer si no hay sesión activa o si la actual ya caducó.
         /// </summary>
-        public async Task Login()
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task Login(CancellationToken cancellationToken = default)
         {
             if (_auth is not null && !_auth.IsExpired())
                 return;
 
             _auth = new Auth(_options.ServerUrl);
-            await _auth.Login(_options.Username, _options.Password, _options.CompanyDb);
+            await _auth.Login(_options.Username, _options.Password, _options.CompanyDb, cancellationToken);
             this._client = _auth.HttpClient;
         }
 
         /// <summary>Cierra la sesión actual contra el Service Layer.</summary>
-        public async Task Logout()
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task Logout(CancellationToken cancellationToken = default)
         {
-            await _auth.Logout();
+            await _auth.Logout(cancellationToken);
         }
 
         /// <summary>
         /// Ejecuta una petición HTTP arbitraria a través del flujo de autenticación: renueva
         /// la sesión si está caducada y reintenta una vez si el SL responde 401.
         /// </summary>
-        /// <param name="request">Lambda que recibe el <see cref="HttpClient"/> con la sesión inyectada.</param>
-        public Task<HttpResponseMessage> ExecuteAsync(Func<HttpClient, Task<HttpResponseMessage>> request)
+        /// <param name="request">Lambda que recibe el <see cref="HttpClient"/> con la sesión inyectada y el <see cref="CancellationToken"/> para pasarlo a la llamada HTTP.</param>
+        /// <param name="cancellationToken">Token para cancelar la petición en curso (también disponible dentro del lambda).</param>
+        public Task<HttpResponseMessage> ExecuteAsync(Func<HttpClient, CancellationToken, Task<HttpResponseMessage>> request, CancellationToken cancellationToken = default)
         {
-            return SendWithAuthAsync(() => request(_client));
+            return SendWithAuthAsync(() => request(_client, cancellationToken), cancellationToken);
         }
 
         /// <summary>
@@ -76,8 +79,9 @@ namespace NikSBO.http
         /// </para>
         /// </summary>
         /// <param name="sql">Sentencia SQL a ejecutar.</param>
+        /// <param name="cancellationToken">Token para cancelar la operación. Si se cancela tras crear el <c>SQLQueries</c> puede quedar huérfano en SAP.</param>
         /// <returns>El JSON crudo (sin tipar) que devuelve <c>/SQLQueries('NAME')/List</c>.</returns>
-        public async Task<object> SqlAsync(string sql)
+        public async Task<object> SqlAsync(string sql, CancellationToken cancellationToken = default)
         {
             var queryName = "SDK_" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
@@ -87,13 +91,13 @@ namespace NikSBO.http
                 SqlCode = queryName,
                 SqlName = queryName,
                 SqlText = sql
-            });
+            }, cancellationToken);
 
             // Ejecutar
-            var result = await GetByEndpointAsync<object>($"SQLQueries('{queryName}')/List");
+            var result = await GetByEndpointAsync<object>($"SQLQueries('{queryName}')/List", cancellationToken);
 
             // Borrar
-            await DeleteByEndpointAsync($"SQLQueries('{queryName}')");
+            await DeleteByEndpointAsync($"SQLQueries('{queryName}')", cancellationToken);
 
             return result;
         }
@@ -102,15 +106,16 @@ namespace NikSBO.http
         /// Método que utilizo para poder verificar que la petición que está enviando el usuario no tiene un sessionId expirado
         /// </summary>
         /// <param name="sendRequest"></param>
+        /// <param name="cancellationToken">Token para cancelar tanto el re-login como la petición original.</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        private async Task<HttpResponseMessage> SendWithAuthAsync(Func<Task<HttpResponseMessage>> sendRequest)
+        private async Task<HttpResponseMessage> SendWithAuthAsync(Func<Task<HttpResponseMessage>> sendRequest, CancellationToken cancellationToken = default)
         {
             if (_auth is null)
                 throw new InvalidOperationException("Llama a Login() primero.");
 
             if (_auth.IsExpired())
-                await _auth.Login(_options.Username, _options.Password, _options.CompanyDb);
+                await _auth.Login(_options.Username, _options.Password, _options.CompanyDb, cancellationToken);
 
             var response = await sendRequest();
 
@@ -118,7 +123,7 @@ namespace NikSBO.http
             // (reloj desincronizado, sesión invalidada por admin, etc.), reintenta.
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                await _auth.Login(_options.Username, _options.Password, _options.CompanyDb);
+                await _auth.Login(_options.Username, _options.Password, _options.CompanyDb, cancellationToken);
                 response = await sendRequest();
             }
 
@@ -130,58 +135,62 @@ namespace NikSBO.http
         /// <summary>GET contra el endpoint indicado y deserializa la respuesta a <typeparamref name="T"/>.</summary>
         /// <typeparam name="T">Tipo al que deserializar la respuesta.</typeparam>
         /// <param name="endpoint">Endpoint relativo (con o sin el prefijo <c>b1s/v1/</c>).</param>
-        public async Task<T> GetByEndpointAsync<T>(string endpoint)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task<T> GetByEndpointAsync<T>(string endpoint, CancellationToken cancellationToken = default)
         {
             if (!endpoint.StartsWith("b1s/v1/"))
                 endpoint = "b1s/v1/" + endpoint;
-            var response = await SendWithAuthAsync(() => _client.GetAsync(endpoint));
+            var response = await SendWithAuthAsync(() => _client.GetAsync(endpoint, cancellationToken), cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
 
-            return (await response.Content.ReadFromJsonAsync<T>())!;
+            return (await response.Content.ReadFromJsonAsync<T>(cancellationToken))!;
         }
 
         /// <summary>POST con cuerpo JSON contra el endpoint indicado y deserializa la respuesta a <typeparamref name="T"/>.</summary>
         /// <typeparam name="T">Tipo al que deserializar la respuesta (típicamente la entidad creada).</typeparam>
         /// <param name="endpoint">Endpoint relativo (con o sin el prefijo <c>b1s/v1/</c>).</param>
         /// <param name="body">Cuerpo a serializar a JSON.</param>
-        public async Task<T> PostByEndpointAsync<T>(string endpoint, object body)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task<T> PostByEndpointAsync<T>(string endpoint, object body, CancellationToken cancellationToken = default)
         {
             if (!endpoint.StartsWith("b1s/v1/"))
                 endpoint = "b1s/v1/" + endpoint;
 
             var json = System.Text.Json.JsonSerializer.Serialize(body);
             var response = await SendWithAuthAsync(() =>
-                    _client.PostAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json")));
+                    _client.PostAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
 
-            return (await response.Content.ReadFromJsonAsync<T>())!;
+            return (await response.Content.ReadFromJsonAsync<T>(cancellationToken))!;
         }
 
         /// <summary>PATCH (actualización parcial) con cuerpo JSON contra el endpoint indicado.</summary>
         /// <param name="endpoint">Endpoint relativo con clave, ej. <c>"BusinessPartners('C001')"</c>.</param>
         /// <param name="body">Cuerpo a serializar a JSON con los campos a actualizar.</param>
-        public async Task PatchByEndpointAsync(string endpoint, object body)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task PatchByEndpointAsync(string endpoint, object body, CancellationToken cancellationToken = default)
         {
             if (!endpoint.StartsWith("b1s/v1/"))
                 endpoint = "b1s/v1/" + endpoint;
 
             var json = System.Text.Json.JsonSerializer.Serialize(body);
             var response = await SendWithAuthAsync(() =>
-                    _client.PatchAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json")));
+                    _client.PatchAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
         }
 
         /// <summary>DELETE contra el endpoint indicado.</summary>
         /// <param name="endpoint">Endpoint relativo con clave, ej. <c>"BusinessPartners('C001')"</c>.</param>
-        public async Task DeleteByEndpointAsync(string endpoint)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task DeleteByEndpointAsync(string endpoint, CancellationToken cancellationToken = default)
         {
             if (!endpoint.StartsWith("b1s/v1/"))
                 endpoint = "b1s/v1/" + endpoint;
 
-            var response = await SendWithAuthAsync(() => _client.DeleteAsync(endpoint));
+            var response = await SendWithAuthAsync(() => _client.DeleteAsync(endpoint, cancellationToken), cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
         }
@@ -193,73 +202,80 @@ namespace NikSBO.http
         /// <summary>GET por clave string. Resuelve el endpoint desde <see cref="B1EntityAttribute"/>.</summary>
         /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
         /// <param name="key">Clave primaria string (ej. <c>"C30000"</c>).</param>
-        public async Task<T> GetAsync<T>(string key)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task<T> GetAsync<T>(string key, CancellationToken cancellationToken = default)
         {
             var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
             var endpoint = $"b1s/v1/{atributo.Endpoint}('{key}')";
-            return await GetByEndpointAsync<T>(endpoint);
+            return await GetByEndpointAsync<T>(endpoint, cancellationToken);
         }
 
         /// <summary>GET por clave numérica. Resuelve el endpoint desde <see cref="B1EntityAttribute"/>.</summary>
         /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
         /// <param name="key">Clave primaria numérica (ej. <c>DocEntry</c>).</param>
-        public async Task<T> GetAsync<T>(int key)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task<T> GetAsync<T>(int key, CancellationToken cancellationToken = default)
         {
             var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
             var endpoint = $"b1s/v1/{atributo.Endpoint}({key})";
-            return await GetByEndpointAsync<T>(endpoint);
+            return await GetByEndpointAsync<T>(endpoint, cancellationToken);
         }
 
         /// <summary>POST para crear una nueva entidad. Resuelve el endpoint desde <see cref="B1EntityAttribute"/>.</summary>
         /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
         /// <param name="body">Entidad o anónimo a serializar a JSON.</param>
-        public async Task<T> PostAsync<T>(object body)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task<T> PostAsync<T>(object body, CancellationToken cancellationToken = default)
         {
             var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
             var endpoint = "b1s/v1/" + atributo.Endpoint;
-            return await PostByEndpointAsync<T>(endpoint, body);
+            return await PostByEndpointAsync<T>(endpoint, body, cancellationToken);
         }
 
         /// <summary>PATCH por clave string. Resuelve el endpoint desde <see cref="B1EntityAttribute"/>.</summary>
         /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
         /// <param name="key">Clave primaria string.</param>
         /// <param name="body">Cuerpo a serializar a JSON con los campos a actualizar.</param>
-        public async Task PatchAsync<T>(string key, object body)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task PatchAsync<T>(string key, object body, CancellationToken cancellationToken = default)
         {
             var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
             var endpoint = $"b1s/v1/{atributo.Endpoint}('{key}')";
-            await PatchByEndpointAsync(endpoint, body);
+            await PatchByEndpointAsync(endpoint, body, cancellationToken);
         }
 
         /// <summary>PATCH por clave numérica. Resuelve el endpoint desde <see cref="B1EntityAttribute"/>.</summary>
         /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
         /// <param name="key">Clave primaria numérica.</param>
         /// <param name="body">Cuerpo a serializar a JSON con los campos a actualizar.</param>
-        public async Task PatchAsync<T>(int key, object body)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task PatchAsync<T>(int key, object body, CancellationToken cancellationToken = default)
         {
             var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
             var endpoint = $"b1s/v1/{atributo.Endpoint}({key})";
-            await PatchByEndpointAsync(endpoint, body);
+            await PatchByEndpointAsync(endpoint, body, cancellationToken);
         }
 
         /// <summary>DELETE por clave string. Resuelve el endpoint desde <see cref="B1EntityAttribute"/>.</summary>
         /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
         /// <param name="key">Clave primaria string.</param>
-        public async Task DeleteAsync<T>(string key)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task DeleteAsync<T>(string key, CancellationToken cancellationToken = default)
         {
             var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
             var endpoint = $"b1s/v1/{atributo.Endpoint}('{key}')";
-            await DeleteByEndpointAsync(endpoint);
+            await DeleteByEndpointAsync(endpoint, cancellationToken);
         }
 
         /// <summary>DELETE por clave numérica. Resuelve el endpoint desde <see cref="B1EntityAttribute"/>.</summary>
         /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
         /// <param name="key">Clave primaria numérica.</param>
-        public async Task DeleteAsync<T>(int key)
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task DeleteAsync<T>(int key, CancellationToken cancellationToken = default)
         {
             var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
             var endpoint = $"b1s/v1/{atributo.Endpoint}({key})";
-            await DeleteByEndpointAsync(endpoint);
+            await DeleteByEndpointAsync(endpoint, cancellationToken);
         }
 
         /// <summary>

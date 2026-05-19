@@ -305,6 +305,12 @@ Under `NikSBO.models`:
 
 - `BusinessPartner` → `BusinessPartners`
 - `Item` → `Items`
+- `ContactEmployee` → `ContactEmployees`
+- `SalesPerson` → `SalesPersons`
+- `BusinessPlace` → `BusinessPlaces`
+- `Warehouse` → `Warehouses`
+- `ItemGroup` → `ItemGroups`
+- `VatGroup` → `VatGroups`
 - Marketing documents (subclasses of `MarketingDocument`):
   - Sales: `SalesOrder` (`Orders`), `Invoice`, `Quotation`, `DeliveryNote`, `CreditNote`, `Return`, `DownPaymentRequest`, `Draft`, `DownPayment`
   - Purchasing: `PurchaseOrder`, `PurchaseInvoice`, `PurchaseRequest`, `PurchaseDeliveryNote`, `PurchaseReturn`, `PurchaseCreditNote`, `PurchaseDownPayment`

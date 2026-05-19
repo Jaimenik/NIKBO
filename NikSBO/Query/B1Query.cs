@@ -15,7 +15,7 @@ namespace NikSBO.Query
     /// <summary>
     /// Query builder fluido para consultas OData contra el Service Layer de SAP B1.
     /// Permite encadenar <see cref="Where(string, BOCondition, string)"/>,
-    /// <see cref="Select"/> y <see cref="Top"/>, y ejecutar la consulta con
+    /// <see cref="Select(string[])"/> y <see cref="Top"/>, y ejecutar la consulta con
     /// <see cref="GetAsync"/>, que deserializa el array <c>value</c> de la
     /// respuesta OData a <see cref="List{T}"/>.
     /// </summary>
@@ -124,6 +124,64 @@ namespace NikSBO.Query
             selects = fields;
             return this;
         }
+
+        /// <summary>
+        /// Variante tipada de <see cref="Select(string[])"/>. Renombrar la propiedad en el
+        /// modelo rompe en compilación en vez de en runtime. El tipo devuelto sigue siendo
+        /// <typeparamref name="T"/>; los campos no incluidos llegarán como <c>null</c> / <c>default</c>.
+        /// <para>Formas admitidas:</para>
+        /// <list type="bullet">
+        ///   <item><description>Una propiedad: <c>.Select(bp =&gt; bp.CardCode)</c></description></item>
+        ///   <item><description>Varias propiedades por params: <c>.Select(bp =&gt; bp.CardCode, bp =&gt; bp.CardName)</c></description></item>
+        ///   <item><description>Tipo anónimo: <c>.Select(bp =&gt; new { bp.CardCode, bp.CardName })</c></description></item>
+        /// </list>
+        /// </summary>
+        /// <param name="selectors">Una o más lambdas; cada una puede apuntar a una propiedad o devolver un tipo anónimo con varias.</param>
+        public B1Query<T> Select(params Expression<Func<T, object>>[] selectors)
+        {
+            selects = selectors.SelectMany(ExtractFieldNames).ToArray();
+            return this;
+        }
+
+        /// <summary>
+        /// Extrae los nombres de propiedad desde una lambda. Maneja accesos directos
+        /// (<c>x =&gt; x.A</c>, incluyendo el <c>Convert(...)</c> que el compilador añade para
+        /// value types) y tipos anónimos (<c>x =&gt; new { x.A, x.B }</c>, representados como
+        /// <see cref="NewExpression"/>).
+        /// </summary>
+        private static IEnumerable<string> ExtractFieldNames(Expression<Func<T, object>> selector)
+        {
+            var body = Unwrap(selector.Body);
+
+            if (body is NewExpression n)
+            {
+                foreach (var arg in n.Arguments)
+                {
+                    var inner = Unwrap(arg);
+                    if (inner is MemberExpression me)
+                        yield return me.Member.Name;
+                    else
+                        throw new ArgumentException(
+                            $"En '{selector}' el elemento '{arg}' no es un acceso a propiedad simple.",
+                            nameof(selector));
+                }
+                yield break;
+            }
+
+            if (body is MemberExpression m)
+            {
+                yield return m.Member.Name;
+                yield break;
+            }
+
+            throw new ArgumentException(
+                $"La expresión '{selector}' no es válida. Usa 'x => x.Campo' o 'x => new {{ x.A, x.B }}'.",
+                nameof(selector));
+        }
+
+        /// <summary>Quita el <c>Convert(...)</c> que el compilador inserta para value types.</summary>
+        private static Expression Unwrap(Expression e) =>
+            e is UnaryExpression u && u.NodeType == ExpressionType.Convert ? u.Operand : e;
 
         /// <summary>
         /// Limita el número de registros devueltos (<c>$top</c>).

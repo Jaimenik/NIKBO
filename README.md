@@ -122,6 +122,61 @@ DateTimeOffset? expiresAt = client.ExpiresAt;
 
 ---
 
+## Logging
+
+The SDK doesn't ship a logger — instead, set `B1Options.LogTrace` to a delegate that receives a pre-formatted string per event. No external dependency, no log levels, no structured logging: just a hook.
+
+```csharp
+var client = new B1Client(new B1Options
+{
+    ServerUrl = "...",
+    Username = "...",
+    Password = "...",
+    LogTrace = msg => Console.WriteLine($"[NikSBO] {msg}")
+});
+```
+
+What you'll see in the console:
+
+```
+[NikSBO] Login -> https://sap:50000/b1s/v1/Login (user: manager, db: SBODemoUS)
+[NikSBO] Login OK (234 ms, sesión hasta 2026-05-20 13:42:10Z)
+[NikSBO] GET /b1s/v1/BusinessPartners?$filter=... -> 200 OK (87 ms)
+[NikSBO] Sesión caducada, re-login automático
+[NikSBO] Login -> https://sap:50000/b1s/v1/Login (user: manager, db: SBODemoUS)
+[NikSBO] Login OK (198 ms, ...)
+[NikSBO] POST /b1s/v1/Orders(123)/Close -> 204 No Content (156 ms)
+[NikSBO] Auto-logout via DisposeAsync
+[NikSBO] Logout -> https://sap:50000/b1s/v1/Logout
+[NikSBO] Logout OK (89 ms)
+```
+
+### Common adaptations
+
+**To a file:**
+
+```csharp
+LogTrace = msg => File.AppendAllText("niksbo.log",
+    $"{DateTime.Now:O} {msg}{Environment.NewLine}")
+```
+
+**Bridge to `ILogger` (ASP.NET Core / Microsoft.Extensions.Logging):**
+
+```csharp
+LogTrace = msg => _logger.LogDebug(msg)
+```
+
+**Add timestamps and PID:**
+
+```csharp
+LogTrace = msg => Console.WriteLine(
+    $"{DateTime.UtcNow:HH:mm:ss.fff} [pid {Environment.ProcessId}] {msg}")
+```
+
+If `LogTrace` is `null` (the default), nothing is emitted and there's no overhead beyond a `Stopwatch` per request (negligible).
+
+---
+
 ## Disposing the client
 
 `B1Client` implements `IAsyncDisposable`, so you can let `await using` handle the Logout for you:

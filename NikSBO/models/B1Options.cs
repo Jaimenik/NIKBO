@@ -37,5 +37,18 @@ namespace NikSBO.models
         /// </para>
         /// </summary>
         public bool AcceptAnyServerCertificate { get; set; } = false;
+
+        /// <summary>
+        /// Hook de tracing para inspeccionar lo que el SDK hace por dentro: cada petición HTTP
+        /// con método, ruta, status code y tiempo; eventos de login/logout; renovaciones de sesión
+        /// automáticas; reintentos por 401; fallos de red. Si es <c>null</c> (default) no se loguea
+        /// nada. Lo recibe el usuario como string ya formateado; no hay niveles ni contexto
+        /// estructurado a propósito, para no forzar dependencias.
+        /// <para>
+        /// Ejemplo: <c>LogTrace = msg =&gt; Console.WriteLine($"[NikSBO] {msg}")</c>.
+        /// Para integrarlo con <c>ILogger</c>: <c>LogTrace = msg =&gt; logger.LogDebug(msg)</c>.
+        /// </para>
+        /// </summary>
+        public Action<string>? LogTrace { get; set; }
     }
 }

@@ -3,7 +3,9 @@ using NikSBO.models;
 using NikSBO.Query;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Text;
@@ -53,17 +55,30 @@ namespace NikSBO.http
             if (_auth is not null && !_auth.IsExpired())
                 return;
 
+            var sw = Stopwatch.StartNew();
+            Log($"Login -> {_options.ServerUrl}b1s/v1/Login (user: {_options.Username}, db: {_options.CompanyDb})");
+
             _auth = new Auth(_options.ServerUrl, _options.AcceptAnyServerCertificate);
             await _auth.Login(_options.Username, _options.Password, _options.CompanyDb, cancellationToken);
             this._client = _auth.HttpClient;
+
+            sw.Stop();
+            Log($"Login OK ({sw.ElapsedMilliseconds} ms, sesión hasta {_auth.ExpiresAt:u})");
         }
 
         /// <summary>Cierra la sesión actual contra el Service Layer.</summary>
         /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
         public async Task Logout(CancellationToken cancellationToken = default)
         {
+            var sw = Stopwatch.StartNew();
+            Log($"Logout -> {_options.ServerUrl}b1s/v1/Logout");
             await _auth.Logout(cancellationToken);
+            sw.Stop();
+            Log($"Logout OK ({sw.ElapsedMilliseconds} ms)");
         }
+
+        /// <summary>Emite un mensaje al hook de tracing si está configurado en <see cref="B1Options.LogTrace"/>.</summary>
+        private void Log(string message) => _options.LogTrace?.Invoke(message);
 
         /// <summary>
         /// Ejecuta una petición HTTP arbitraria a través del flujo de autenticación: renueva
@@ -120,18 +135,46 @@ namespace NikSBO.http
                 throw new InvalidOperationException("Llama a Login() primero.");
 
             if (_auth.IsExpired())
+            {
+                Log("Sesión caducada, re-login automático");
                 await _auth.Login(_options.Username, _options.Password, _options.CompanyDb, cancellationToken);
+            }
 
-            var response = await sendRequest();
+            var response = await SendAndLog(sendRequest);
 
             // Cinturón y tirantes: si el SL nos devuelve 401 igualmente
             // (reloj desincronizado, sesión invalidada por admin, etc.), reintenta.
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
+                Log("401 Unauthorized, re-login y reintento");
                 await _auth.Login(_options.Username, _options.Password, _options.CompanyDb, cancellationToken);
-                response = await sendRequest();
+                response = await SendAndLog(sendRequest, prefix: "[retry] ");
             }
 
+            return response;
+        }
+
+        /// <summary>
+        /// Ejecuta la petición HTTP midiendo el tiempo y emitiendo un trace al final con
+        /// método, ruta, status y duración. Si la petición lanza una excepción, la registra
+        /// y la relanza para no alterar el comportamiento.
+        /// </summary>
+        private async Task<HttpResponseMessage> SendAndLog(Func<Task<HttpResponseMessage>> sendRequest, string prefix = "")
+        {
+            var sw = Stopwatch.StartNew();
+            HttpResponseMessage response;
+            try
+            {
+                response = await sendRequest();
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                Log($"{prefix}Request failed after {sw.ElapsedMilliseconds} ms: {ex.GetType().Name}: {ex.Message}");
+                throw;
+            }
+            sw.Stop();
+            Log($"{prefix}{response.RequestMessage?.Method} {response.RequestMessage?.RequestUri?.PathAndQuery} -> {(int)response.StatusCode} {response.ReasonPhrase} ({sw.ElapsedMilliseconds} ms)");
             return response;
         }
 
@@ -402,8 +445,12 @@ namespace NikSBO.http
 
             if (_auth is not null && !_auth.IsExpired())
             {
-                try { await _auth.Logout(); }
-                catch { /* swallow: Dispose nunca debe lanzar */ }
+                Log("Auto-logout via DisposeAsync");
+                try { await Logout(); }   // pasa por B1Client.Logout para que loguee tiempo y URL
+                catch (Exception ex)
+                {
+                    Log($"Auto-logout falló (silenciado): {ex.GetType().Name}: {ex.Message}");
+                }
             }
 
             _auth?.Dispose();

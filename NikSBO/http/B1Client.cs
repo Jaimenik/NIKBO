@@ -93,15 +93,38 @@ namespace NikSBO.http
 
         /// <summary>
         /// Ejecuta SQL crudo contra SAP creando, ejecutando y borrando un <c>SQLQueries</c> de forma transparente.
-        /// <para>
-        /// Cuidado: el SQL se concatena tal cual, sin parametrizar. No lo uses con valores
-        /// controlados por el usuario hasta que el SDK añada soporte de parámetros.
-        /// </para>
+        /// Útil para joins, agregaciones y consultas que OData no expresa bien.
         /// </summary>
         /// <param name="sql">Sentencia SQL a ejecutar.</param>
-        /// <param name="cancellationToken">Token para cancelar la operación. Si se cancela tras crear el <c>SQLQueries</c> puede quedar huérfano en SAP.</param>
+        /// <param name="cancellationToken">Token para cancelar la operación.</param>
         /// <returns>El JSON crudo (sin tipar) que devuelve <c>/SQLQueries('NAME')/List</c>.</returns>
-        public async Task<object> SqlAsync(string sql, CancellationToken cancellationToken = default)
+        public Task<object> SqlAsync(string sql, CancellationToken cancellationToken = default)
+            => SqlAsyncInternal(sql, parameters: null, cancellationToken);
+
+        /// <summary>
+        /// Variante parametrizada de <see cref="SqlAsync(string, CancellationToken)"/>. Usa placeholders
+        /// <c>:nombre</c> en el SQL y el SDK pone los valores en el query string al ejecutar, con quoting
+        /// correcto por tipo (strings entre <c>'</c>, fechas en ISO, decimales con cultura invariante,
+        /// escape de apóstrofos). Cierra la puerta a SQL injection cuando los valores vienen del usuario.
+        /// </summary>
+        /// <param name="sql">Sentencia SQL con placeholders, p.ej. <c>SELECT * FROM OCRD WHERE CardCode = :code</c>.</param>
+        /// <param name="parameters">
+        /// Objeto con los valores. Tipo anónimo (<c>new { code = "C001", type = "C" }</c>) o
+        /// <see cref="IDictionary{TKey, TValue}"/> (con <c>string</c> keys). El nombre de la propiedad o
+        /// clave mapea al placeholder en el SQL (sin el <c>:</c>).
+        /// </param>
+        /// <param name="cancellationToken">Token para cancelar la operación.</param>
+        /// <returns>El JSON crudo (sin tipar) que devuelve <c>/SQLQueries('NAME')/List</c>.</returns>
+        public Task<object> SqlAsync(string sql, object parameters, CancellationToken cancellationToken = default)
+            => SqlAsyncInternal(sql, parameters, cancellationToken);
+
+        /// <summary>
+        /// Implementación común de <see cref="SqlAsync(string, CancellationToken)"/> y
+        /// <see cref="SqlAsync(string, object, CancellationToken)"/>. El cleanup del SQLQueries
+        /// se hace en <c>finally</c> para que no queden entradas huérfanas en SAP si la
+        /// ejecución de <c>/List</c> falla.
+        /// </summary>
+        private async Task<object> SqlAsyncInternal(string sql, object? parameters, CancellationToken cancellationToken)
         {
             var queryName = "SDK_" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
@@ -113,13 +136,96 @@ namespace NikSBO.http
                 SqlText = sql
             }, cancellationToken);
 
-            // Ejecutar
-            var result = await GetByEndpointAsync<object>($"SQLQueries('{queryName}')/List", cancellationToken);
+            try
+            {
+                // Ejecutar con (o sin) parámetros
+                var listEndpoint = $"SQLQueries('{queryName}')/List";
+                if (parameters is not null)
+                    listEndpoint += BuildSqlQueryString(parameters);
 
-            // Borrar
-            await DeleteByEndpointAsync($"SQLQueries('{queryName}')", cancellationToken);
+                return await GetByEndpointAsync<object>(listEndpoint, cancellationToken);
+            }
+            finally
+            {
+                // Cleanup best-effort: si el DELETE falla loguea y sigue, para no enmascarar
+                // un error de la query principal.
+                try { await DeleteByEndpointAsync($"SQLQueries('{queryName}')", cancellationToken); }
+                catch (Exception ex)
+                {
+                    Log($"SqlAsync: no se pudo borrar el SQLQueries '{queryName}' tras ejecutarlo: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
 
-            return result;
+        /// <summary>
+        /// Construye el query string de parámetros para el endpoint <c>/List</c> de SQLQueries.
+        /// Acepta tipos anónimos (via reflexión sobre propiedades públicas) y diccionarios
+        /// <c>IDictionary&lt;string, object&gt;</c>.
+        /// </summary>
+        internal static string BuildSqlQueryString(object parameters)
+        {
+            var sb = new StringBuilder();
+            var first = true;
+
+            void Append(string name, object? value)
+            {
+                sb.Append(first ? '?' : '&');
+                first = false;
+                sb.Append(Uri.EscapeDataString(name))
+                  .Append('=')
+                  .Append(Uri.EscapeDataString(FormatSqlParam(value)));
+            }
+
+            if (parameters is IDictionary<string, object?> nullableDict)
+            {
+                foreach (var kvp in nullableDict)
+                    Append(kvp.Key, kvp.Value);
+            }
+            else if (parameters is IDictionary<string, object> dict)
+            {
+                foreach (var kvp in dict)
+                    Append(kvp.Key, kvp.Value);
+            }
+            else
+            {
+                foreach (var prop in parameters.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                    Append(prop.Name, prop.GetValue(parameters));
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Formatea un valor como literal SQL/OData para meterlo en el query string.
+        /// Strings se entrecomillan y se escapan los apóstrofos (<c>'</c> → <c>''</c>);
+        /// decimales/fechas usan cultura invariante e ISO 8601; null se envía como <c>null</c>.
+        /// </summary>
+        internal static string FormatSqlParam(object? value)
+        {
+            switch (value)
+            {
+                case null:
+                    return "null";
+                case string s:
+                    return "'" + s.Replace("'", "''") + "'";
+                case bool b:
+                    return b ? "true" : "false";
+                case DateTime dt:
+                    return "'" + dt.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + "'";
+                case DateTimeOffset dto:
+                    return "'" + dto.ToString("yyyy-MM-ddTHH:mm:ssK", System.Globalization.CultureInfo.InvariantCulture) + "'";
+                case decimal d:
+                    return d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                case double db:
+                    return db.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                case float f:
+                    return f.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                case Guid g:
+                    return "'" + g.ToString() + "'";
+                default:
+                    // int, long, short, byte, etc. — ToString es invariante de cultura para integrales
+                    return value.ToString() ?? "null";
+            }
         }
 
         /// <summary>

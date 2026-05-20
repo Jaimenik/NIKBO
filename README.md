@@ -488,7 +488,47 @@ var result = await client.SqlAsync(@"
 ");
 ```
 
-> Today it returns `object` (untyped JSON) and **concatenates the SQL directly** — don't use it with user-controlled input until we add parameter support (`SqlParams`).
+### Parameters (avoid SQL injection)
+
+When values come from user input, **never concatenate** them into the SQL string. Use named parameters with `:name` placeholders and pass the values as an anonymous type (or a dictionary):
+
+```csharp
+var rows = await client.SqlAsync(
+    @"SELECT ""CardCode"", ""CardName""
+      FROM OCRD
+      WHERE ""CardType"" = :type
+        AND ""CardCode"" LIKE :prefix",
+    new { type = "C", prefix = userInput + "%" });
+```
+
+The SDK formats each value safely:
+
+| C# type            | URL formatting                            |
+| ------------------ | ------------------------------------------ |
+| `string`           | `'value'` with `'` doubled (`O'Brien` → `'O''Brien'`) |
+| `int`, `long`, …   | `42` (no quotes)                           |
+| `bool`             | `true` / `false`                           |
+| `decimal`, `double`, `float` | `12.5` (invariant culture, dot)   |
+| `DateTime`         | `'2024-01-15T10:30:00'` (ISO 8601)         |
+| `null`             | `null`                                     |
+
+For dynamic parameter sets, use a dictionary:
+
+```csharp
+var filter = new Dictionary<string, object>
+{
+    ["type"] = "C",
+    ["minBalance"] = 1000m
+};
+
+var rows = await client.SqlAsync(
+    @"SELECT * FROM OCRD WHERE ""CardType"" = :type AND ""Balance"" >= :minBalance",
+    filter);
+```
+
+If the SQL fails to execute, the `SQLQueries` entry that the SDK created is still cleaned up afterwards — no orphan queries left in SAP.
+
+> Result type is still `object` (raw JSON). Typed deserialization would be a separate feature.
 
 ---
 

@@ -294,6 +294,76 @@ namespace NikSBO.http
         }
         #endregion
 
+        #region Acciones de documento
+
+        /// <summary>
+        /// Invoca una acción del Service Layer sobre un documento (<c>POST /Endpoint(key)/Action</c>).
+        /// Las acciones de SAP B1 cambian el estado del documento (<c>Close</c>, <c>Cancel</c>,
+        /// <c>MarkAsClosed</c>, etc.) y normalmente no llevan cuerpo.
+        /// </summary>
+        /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
+        /// <param name="key">Clave primaria numérica del documento (típicamente <c>DocEntry</c>).</param>
+        /// <param name="action">Nombre de la acción tal como la expone el Service Layer, sin slashes.</param>
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task InvokeActionAsync<T>(int key, string action, CancellationToken cancellationToken = default)
+        {
+            var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
+            await InvokeActionByEndpointAsync($"{atributo.Endpoint}({key})", action, cancellationToken);
+        }
+
+        /// <summary>
+        /// Invoca una acción del Service Layer sobre un documento con clave string
+        /// (<c>POST /Endpoint('key')/Action</c>).
+        /// </summary>
+        /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
+        /// <param name="key">Clave primaria string.</param>
+        /// <param name="action">Nombre de la acción.</param>
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task InvokeActionAsync<T>(string key, string action, CancellationToken cancellationToken = default)
+        {
+            var atributo = typeof(T).GetCustomAttribute<B1EntityAttribute>();
+            await InvokeActionByEndpointAsync($"{atributo.Endpoint}('{key}')", action, cancellationToken);
+        }
+
+        /// <summary>
+        /// Invoca una acción contra un endpoint manual. Útil para UDOs o recursos sin modelo.
+        /// </summary>
+        /// <param name="endpoint">Endpoint relativo con la clave del recurso, ej. <c>"MY_UDO('R001')"</c>.</param>
+        /// <param name="action">Nombre de la acción.</param>
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public async Task InvokeActionByEndpointAsync(string endpoint, string action, CancellationToken cancellationToken = default)
+        {
+            if (!endpoint.StartsWith("b1s/v1/"))
+                endpoint = "b1s/v1/" + endpoint;
+            var url = $"{endpoint}/{action}";
+
+            var response = await SendWithAuthAsync(
+                () => _client.PostAsync(url, content: null, cancellationToken), cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw await B1Exception.FromResponseAsync(response);
+        }
+
+        /// <summary>
+        /// Atajo para la acción <c>Close</c>. Equivale a <see cref="InvokeActionAsync{T}(int, string, CancellationToken)"/>
+        /// con <c>"Close"</c> como acción.
+        /// </summary>
+        /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
+        /// <param name="key">Clave primaria numérica del documento.</param>
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public Task CloseAsync<T>(int key, CancellationToken cancellationToken = default)
+            => InvokeActionAsync<T>(key, "Close", cancellationToken);
+
+        /// <summary>
+        /// Atajo para la acción <c>Close</c> con clave string.
+        /// </summary>
+        /// <typeparam name="T">Tipo del modelo decorado con <see cref="B1EntityAttribute"/>.</typeparam>
+        /// <param name="key">Clave primaria string del documento.</param>
+        /// <param name="cancellationToken">Token para cancelar la petición en curso.</param>
+        public Task CloseAsync<T>(string key, CancellationToken cancellationToken = default)
+            => InvokeActionAsync<T>(key, "Close", cancellationToken);
+
+        #endregion
+
         #region Query y Batch
 
         /// <summary>

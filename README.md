@@ -327,6 +327,48 @@ int total = await client.Query<BusinessPartner>()
 
 ---
 
+## Document actions (Close, Cancel, …)
+
+SAP B1 exposes operations like closing or cancelling a document as **actions** — `POST /Endpoint(key)/ActionName` with no body. These aren't CRUD, they change the document's state.
+
+### Generic — works with any action
+
+```csharp
+// Close a sales order
+await client.InvokeActionAsync<SalesOrder>(123, "Close");
+
+// Cancel an invoice
+await client.InvokeActionAsync<Invoice>(456, "Cancel");
+
+// Any future SAP action without SDK updates
+await client.InvokeActionAsync<DeliveryNote>(789, "MarkAsClosed");
+```
+
+For documents with string keys, or for UDOs:
+
+```csharp
+// String key
+await client.InvokeActionAsync<MyDoc>("ABC", "Close");
+
+// Manual endpoint (UDO with custom action)
+await client.InvokeActionByEndpointAsync("MY_UDO('R001')", "MyCustomAction");
+```
+
+### Typed shortcut for `Close`
+
+`Close` is the most common action, so there's a typed shortcut:
+
+```csharp
+await client.CloseAsync<SalesOrder>(123);
+await client.CloseAsync<Quotation>(456);
+```
+
+Internally it's just `InvokeActionAsync<T>(key, "Close")` — same call, less typing.
+
+> Actions that return a payload (rare) aren't supported by these helpers yet. For those, use `ExecuteAsync` and read the response manually.
+
+---
+
 ## Batch (atomic transactions)
 
 The Service Layer batch endpoint groups operations into an **atomic** changeset: if any of them fails, the rest are rolled back.

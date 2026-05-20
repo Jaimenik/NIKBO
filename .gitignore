@@ -489,3 +489,6 @@ Test/
 
 # Claude Code working dir
 .claude/
+
+# VS Code workspace settings (no compartir preferencias personales del editor)
+.vscode/

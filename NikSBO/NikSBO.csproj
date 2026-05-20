@@ -7,16 +7,24 @@
     <LangVersion>latest</LangVersion>
 
     <PackageId>NikSBO</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Jaimenik</Authors>
-    <Description>C# SDK for the SAP Business One Service Layer, multi-targeted for .NET 8 / .NET 6 / .NET Standard 2.0 (also runs on .NET Framework 4.6.2+). Auth with automatic session renewal, typed CRUD, fluent OData query builder (LINQ and string-based), transactional batch, raw SQL helper, UDF support and CancellationToken on every async method.</Description>
+    <Description>C# SDK for the SAP Business One Service Layer, multi-targeted for .NET 8 / .NET 6 / .NET Standard 2.0 (also runs on .NET Framework 4.6.2+). Auth with automatic session renewal, typed CRUD, fluent OData query builder (LINQ and string-based), transactional batch, raw SQL helper with parameter binding, UDF support, document actions (Close, Cancel, …), IAsyncDisposable for auto-logout, a logging hook and CancellationToken on every async method.</Description>
     <PackageTags>sap;sap-business-one;sap-b1;service-layer;odata;sdk</PackageTags>
     <PackageReleaseNotes>
-0.2.0 — Multi-targeting (.NET Framework 4.6.2+ via netstandard2.0), CancellationToken en todas las async, validación TLS estricta por defecto (opt-in vía B1Options.AcceptAnyServerCertificate), 6 modelos nuevos (SalesPerson, ContactEmployee, BusinessPlace, ItemGroup, Warehouse, VatGroup), Select tipado con lambdas y anonymous types, proyecto de tests xUnit con 21 casos.
+0.3.0 — Document actions, await using, logging hook, SqlAsync parametrizado.
 
-Breaking changes desde 0.1.0:
-- ExecuteAsync delegate: Func&lt;HttpClient, Task&lt;...&gt;&gt; → Func&lt;HttpClient, CancellationToken, Task&lt;...&gt;&gt;.
-- Validación TLS ahora estricta por defecto; SAP B1 on-prem con cert autofirmado requiere B1Options.AcceptAnyServerCertificate = true.
+Nuevas features:
+- Acciones de documento: client.CloseAsync&lt;T&gt;(key), client.InvokeActionAsync&lt;T&gt;(key, action), InvokeActionByEndpointAsync para UDOs.
+- B1Client implementa IAsyncDisposable: await using cierra sesión automáticamente.
+- Logging hook B1Options.LogTrace (Action&lt;string&gt;) sin dependencias externas. Loguea cada request, login/logout, re-logins automáticos y fallos.
+- SqlAsync con parámetros (tipo anónimo o IDictionary&lt;string,object&gt;), escape seguro por tipo — cierra la vía de SQL injection.
+
+Mejoras:
+- SqlAsync envuelve cleanup en try/finally; no quedan SQLQueries huérfanos en SAP si la query falla.
+- DisposeAsync delega en Logout() para que el cierre se loguee con LogTrace.
+
+Sin breaking changes desde 0.2.0. Tests: 32 (antes 21).
     </PackageReleaseNotes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

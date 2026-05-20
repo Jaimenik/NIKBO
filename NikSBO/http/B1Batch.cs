@@ -5,6 +5,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using NikSBO.Exceptions;
+#if NETSTANDARD2_0
+using NikSBO.Compat;   // polyfill: ReadAsStringAsync(CancellationToken) no existe en netstandard2.0
+#endif
 
 namespace NikSBO.http
 {

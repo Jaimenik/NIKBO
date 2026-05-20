@@ -68,8 +68,10 @@ namespace NikSBO
                 UseCookies = true,
                 CookieContainer = _cookies
             };
+            // Lambda inline en vez de HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            // porque ese helper estático no existe en netstandard2.0. Comportamiento idéntico.
             if (acceptAnyServerCertificate)
-                _handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                _handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
             _client = new HttpClient(_handler)
             {
                 BaseAddress = new Uri(uri)
@@ -95,7 +97,7 @@ namespace NikSBO
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
 
-            var data = await response.Content.ReadFromJsonAsync<LoginResponse>(cancellationToken);
+            var data = await response.Content.ReadFromJsonAsync<LoginResponse>(options: null, cancellationToken: cancellationToken);
             _sessionId = data!.SessionId;
             _sessionTimeout = data.SessionTimeout;
             _version = data.Version;

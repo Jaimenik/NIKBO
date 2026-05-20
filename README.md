@@ -1,12 +1,12 @@
 # NikSBO
 
-A C# / .NET 8 SDK for the **SAP Business One Service Layer**. Built so you don't have to fight SAP's OData API by hand: login with auto-renewal, typed CRUD, a fluent query builder (with LINQ), transactional batches, raw SQL, UDF support and `CancellationToken` on every async call.
+A C# SDK for the **SAP Business One Service Layer**, multi-targeted for **.NET 8 / .NET 6 / .NET Standard 2.0** (so it also runs on .NET Framework 4.6.2+ — handy for SAP B1 add-ons). Built so you don't have to fight SAP's OData API by hand: login with auto-renewal, typed CRUD, a fluent query builder (with LINQ), transactional batches, raw SQL, UDF support and `CancellationToken` on every async call.
 
 ---
 
 ## Requirements
 
-- .NET 8 SDK
+- .NET 8, .NET 6, or any platform compatible with .NET Standard 2.0 (this includes **.NET Framework 4.6.2+**, Mono 5.4+, Unity, Xamarin, etc.)
 - Access to a SAP B1 Service Layer (HANA or SQL Server) — typically exposed at `https://<host>:50000/`
 - A SAP user with permissions on the target company database
 

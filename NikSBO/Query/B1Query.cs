@@ -9,6 +9,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Linq.Expressions;
+#if NETSTANDARD2_0
+using NikSBO.Compat;   // polyfill: ReadAsStringAsync(CancellationToken) no existe en netstandard2.0
+#endif
 
 namespace NikSBO.Query
 {
@@ -203,7 +206,7 @@ namespace NikSBO.Query
             var response = await _b1.ExecuteAsync((http, ct) => http.GetAsync(BuildUrl(false), ct), cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
-            var data = (await response.Content.ReadFromJsonAsync<ODataResponse<T>>(cancellationToken))!;
+            var data = (await response.Content.ReadFromJsonAsync<ODataResponse<T>>(options: null, cancellationToken: cancellationToken))!;
             return data.value;
 
         }

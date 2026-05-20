@@ -8,6 +8,9 @@ using System.Net.Http.Json;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+#if NETSTANDARD2_0
+using NikSBO.Compat;   // polyfill: HttpClient.PatchAsync no existe en netstandard2.0
+#endif
 
 namespace NikSBO.http
 {
@@ -144,7 +147,7 @@ namespace NikSBO.http
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
 
-            return (await response.Content.ReadFromJsonAsync<T>(cancellationToken))!;
+            return (await response.Content.ReadFromJsonAsync<T>(options: null, cancellationToken: cancellationToken))!;
         }
 
         /// <summary>POST con cuerpo JSON contra el endpoint indicado y deserializa la respuesta a <typeparamref name="T"/>.</summary>
@@ -163,7 +166,7 @@ namespace NikSBO.http
             if (!response.IsSuccessStatusCode)
                 throw await B1Exception.FromResponseAsync(response);
 
-            return (await response.Content.ReadFromJsonAsync<T>(cancellationToken))!;
+            return (await response.Content.ReadFromJsonAsync<T>(options: null, cancellationToken: cancellationToken))!;
         }
 
         /// <summary>PATCH (actualización parcial) con cuerpo JSON contra el endpoint indicado.</summary>

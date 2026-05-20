@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net6.0;netstandard2.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
 
     <PackageId>NikSBO</PackageId>
     <Version>0.1.0</Version>
@@ -26,6 +27,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="NikSBO.Tests" />
+  </ItemGroup>
+
+  <!-- netstandard2.0 no trae ReadFromJsonAsync; el paquete lo retroporta -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Net.Http.Json" Version="8.0.1" />
   </ItemGroup>
 
 </Project>

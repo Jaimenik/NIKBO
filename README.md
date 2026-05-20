@@ -122,6 +122,25 @@ DateTimeOffset? expiresAt = client.ExpiresAt;
 
 ---
 
+## Disposing the client
+
+`B1Client` implements `IAsyncDisposable`, so you can let `await using` handle the Logout for you:
+
+```csharp
+await using var client = new B1Client(new B1Options { ... });
+await client.Login();
+
+// ... your operations ...
+
+// On scope exit: Logout against the SL + HttpClient cleanup, automatically.
+```
+
+If the Logout fails during disposal (server down, network blip, …), the exception is **swallowed silently** — `Dispose` must never throw. If you need to know whether the Logout succeeded, call `await client.Logout()` explicitly before exiting the scope.
+
+> Only `IAsyncDisposable` is implemented (not synchronous `IDisposable`). Synchronous dispose would have to block on `Logout`, which can deadlock in UI/ASP.NET sync contexts. If you can't use `await using` (legacy sync code on .NET Framework), call `await client.Logout()` manually.
+
+---
+
 ## Cancellation
 
 Every async method (`Login`, `Logout`, `GetAsync`, `PostAsync`, `Query<T>.GetAsync`, `B1Batch.SubmitAsync`, `SqlAsync`, …) accepts an optional `CancellationToken` as the last parameter:

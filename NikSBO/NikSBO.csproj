@@ -36,9 +36,10 @@ Breaking changes desde 0.1.0:
     <InternalsVisibleTo Include="NikSBO.Tests" />
   </ItemGroup>
 
-  <!-- netstandard2.0 no trae ReadFromJsonAsync; el paquete lo retroporta -->
+  <!-- netstandard2.0 no trae ReadFromJsonAsync ni IAsyncDisposable; los paquetes los retroportan -->
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="System.Net.Http.Json" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
   </ItemGroup>
 
 </Project>

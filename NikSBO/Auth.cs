@@ -26,7 +26,7 @@ namespace NikSBO
     /// de expiración. <see cref="NikSBO.http.B1Client"/> lo usa internamente — no suele ser
     /// necesario instanciarlo a mano.
     /// </summary>
-    public class Auth
+    public class Auth : IDisposable
     {
         private readonly CookieContainer _cookies;
         private readonly HttpClientHandler _handler;
@@ -34,6 +34,7 @@ namespace NikSBO
         private string? _sessionId;
         private int _sessionTimeout;
         private string? _version;
+        private bool _disposed;
 
         /// <summary>Duración de la sesión en minutos tal y como la reportó el Service Layer en el login.</summary>
         public int SessionTimeoutMinutes => _sessionTimeout;
@@ -150,5 +151,16 @@ namespace NikSBO
         /// peticiones manuales que requieran la sesión activa.
         /// </summary>
         public HttpClient HttpClient => _client;
+
+        /// <summary>
+        /// Libera el <see cref="HttpClient"/> y su handler. Idempotente: llamarlo varias veces
+        /// no rompe nada. No cierra la sesión en el servidor; eso es responsabilidad de <see cref="Logout"/>.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _client?.Dispose();   // HttpClient libera también el HttpClientHandler que recibió.
+        }
     }
 }

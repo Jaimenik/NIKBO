@@ -18,12 +18,14 @@ namespace NikSBO.http
     /// Cliente principal del SDK contra el Service Layer de SAP Business One.
     /// Gestiona la sesión (login y renovación automática), expone CRUD tipado y por endpoint,
     /// y abre <see cref="B1Query{T}"/> y <see cref="B1Batch"/>.
+    /// Implementa <see cref="IAsyncDisposable"/> para que <c>await using</c> haga Logout automático.
     /// </summary>
-    public class B1Client
+    public class B1Client : IAsyncDisposable
     {
         private HttpClient _client;
         private B1Options _options;
         private Auth _auth;
+        private bool _disposed;
 
         /// <summary>Momento UTC en el que se prevé que caduque la sesión actual, o <c>null</c> si no se ha hecho login.</summary>
         public DateTimeOffset? ExpiresAt => _auth?.ExpiresAt;
@@ -386,5 +388,25 @@ namespace NikSBO.http
         }
 
         #endregion
+
+        /// <summary>
+        /// Cierra la sesión activa (si la hay) en best-effort y libera el <see cref="HttpClient"/>.
+        /// Idempotente. Las excepciones durante el Logout se silencian — Dispose nunca debe lanzar.
+        /// Si necesitas saber que el Logout funcionó, llama a <see cref="Logout"/> explícitamente
+        /// antes del dispose.
+        /// </summary>
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            if (_auth is not null && !_auth.IsExpired())
+            {
+                try { await _auth.Logout(); }
+                catch { /* swallow: Dispose nunca debe lanzar */ }
+            }
+
+            _auth?.Dispose();
+        }
     }
 }

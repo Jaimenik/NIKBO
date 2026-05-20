@@ -1,6 +1,6 @@
 # NikSBO
 
-A C# SDK for the **SAP Business One Service Layer**, multi-targeted for **.NET 8 / .NET 6 / .NET Standard 2.0** (so it also runs on .NET Framework 4.6.2+ — handy for SAP B1 add-ons). Built so you don't have to fight SAP's OData API by hand: login with auto-renewal, typed CRUD, a fluent query builder (with LINQ), transactional batches, raw SQL, UDF support and `CancellationToken` on every async call.
+A C# SDK for the **SAP Business One Service Layer**, multi-targeted for **.NET 8 / .NET 6 / .NET Standard 2.0** (so it also runs on .NET Framework 4.6.2+ — handy for SAP B1 add-ons). Built so you don't have to fight SAP's OData API by hand: login with auto-renewal, typed CRUD, a fluent query builder (with LINQ), document actions (`Close`, `Cancel`, …), transactional batches, parameterized raw SQL, UDF support, `IAsyncDisposable` (auto-logout via `await using`), a logging hook and `CancellationToken` on every async method.
 
 ---
 
@@ -695,8 +695,9 @@ In Visual Studio, open `NikSBO.slnx` and run **Test → Test Explorer**.
 
 - Amounts on marketing documents are `double`, not `decimal` — watch out for precision loss
 - The query builder doesn't have `Skip` / `$expand` / `$search`
-- `SqlAsync` doesn't parameterize values (injection risk if you concatenate untrusted input)
-- No `IServiceCollection` integration for DI yet
+- `SqlAsync` returns `object` (raw JSON), not typed `List<T>`
+- Document actions that return a payload aren't covered by the typed helpers — use `ExecuteAsync` for those
+- No `IServiceCollection` integration for DI (intentional — target audience is SAP B1 add-on development on .NET Framework where DI isn't the norm)
 
 ---
 

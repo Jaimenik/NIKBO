@@ -334,7 +334,7 @@ var recentOrders = await client.Query<SalesOrder>()
 //   &&, ||, !
 //   string.Contains / StartsWith / EndsWith
 //   captured variables (closures)
-var name = "Acme";
+var name = "Demo";
 var hits = await client.Query<BusinessPartner>()
     .Where(bp => bp.CardName.Contains(name))
     .GetAsync();
@@ -566,7 +566,7 @@ To write UDFs in POST/PATCH, just include them in the body (an anonymous type wo
 ```csharp
 await client.PatchAsync<BusinessPartner>("C30000", new
 {
-    CardName   = "Acme LLC",
+    CardName   = "Demo Customer",
     U_MY_FIELD = "R002"
 });
 ```
@@ -640,7 +640,7 @@ try
     var customer = await client.PostAsync<BusinessPartner>(new BusinessPartner
     {
         CardCode = "C12345",
-        CardName = "Acme LLC",
+        CardName = "Demo Customer",
         CardType = "cCustomer"
     });
 

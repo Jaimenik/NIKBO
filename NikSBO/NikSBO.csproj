@@ -7,24 +7,24 @@
     <LangVersion>latest</LangVersion>
 
     <PackageId>NikSBO</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>Jaimenik</Authors>
-    <Description>C# SDK for the SAP Business One Service Layer, multi-targeted for .NET 8 / .NET 6 / .NET Standard 2.0 (also runs on .NET Framework 4.6.2+). Auth with automatic session renewal, typed CRUD, fluent OData query builder (LINQ and string-based), transactional batch, raw SQL helper with parameter binding, UDF support, document actions (Close, Cancel, …), IAsyncDisposable for auto-logout, a logging hook and CancellationToken on every async method.</Description>
+    <Description>C# SDK for the SAP Business One Service Layer, multi-targeted for .NET 8 / .NET 6 / .NET Standard 2.0 (also runs on .NET Framework 4.6.2+). Auth with automatic session renewal, typed CRUD, fluent OData query builder (LINQ and string-based), transactional batch, raw SQL helper with parameter binding, UDF support, document actions (Close, Cancel, …), schema management (create UDTs, UDFs and UDOs programmatically), IAsyncDisposable for auto-logout, a logging hook and CancellationToken on every async method.</Description>
     <PackageTags>sap;sap-business-one;sap-b1;service-layer;odata;sdk</PackageTags>
     <PackageReleaseNotes>
-0.3.0 — Document actions, await using, logging hook, SqlAsync parametrizado.
+0.4.0 — Módulo de metadata para crear UDTs, UDFs y UDOs programáticamente.
 
 Nuevas features:
-- Acciones de documento: client.CloseAsync&lt;T&gt;(key), client.InvokeActionAsync&lt;T&gt;(key, action), InvokeActionByEndpointAsync para UDOs.
-- B1Client implementa IAsyncDisposable: await using cierra sesión automáticamente.
-- Logging hook B1Options.LogTrace (Action&lt;string&gt;) sin dependencias externas. Loguea cada request, login/logout, re-logins automáticos y fallos.
-- SqlAsync con parámetros (tipo anónimo o IDictionary&lt;string,object&gt;), escape seguro por tipo — cierra la vía de SQL injection.
+- client.EnsureUserTableAsync(UserTableDefinition) — POST /UserTablesMD idempotente.
+- client.EnsureUserFieldAsync(UserFieldDefinition) — POST /UserFieldsMD con lookup por $filter (UDFs no tienen single-key).
+- client.EnsureUserObjectAsync(UserObjectDefinition) — POST /UserObjectsMD idempotente.
+- Cuatro enums tipados (UserTableType, UserFieldType, UserFieldSubType, UserObjectType) decorados con [EnumMember] y serializados vía SapEnumConverter&lt;T&gt; a los strings internos del SL (bott_, db_, st_, boud_).
+- ValidValue record para UDFs con listas combo (ValidValuesMD).
+- BoolToYesNoConverter transparente para UserObjectsMD, que usa BoYesNoEnum (tYES/tNO) en vez de JSON true/false.
 
-Mejoras:
-- SqlAsync envuelve cleanup en try/finally; no quedan SQLQueries huérfanos en SAP si la query falla.
-- DisposeAsync delega en Logout() para que el cierre se loguee con LogTrace.
+Pensado para installers de addons: ejecutar Ensure* en cada arranque garantiza el schema sin afectar instalaciones ya hechas.
 
-Sin breaking changes desde 0.2.0. Tests: 32 (antes 21).
+Sin breaking changes desde 0.3.0. Tests: 37 (antes 32).
     </PackageReleaseNotes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

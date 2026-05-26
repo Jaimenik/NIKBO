@@ -22,7 +22,7 @@ namespace NikSBO.http
     /// y abre <see cref="B1Query{T}"/> y <see cref="B1Batch"/>.
     /// Implementa <see cref="IAsyncDisposable"/> para que <c>await using</c> haga Logout automático.
     /// </summary>
-    public class B1Client : IAsyncDisposable
+    public partial class B1Client : IAsyncDisposable
     {
         private HttpClient _client;
         private B1Options _options;

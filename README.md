@@ -532,6 +532,109 @@ If the SQL fails to execute, the `SQLQueries` entry that the SDK created is stil
 
 ---
 
+## Schema / Metadata (UDTs, UDFs, UDOs)
+
+Create SAP B1 user-defined **tables**, **fields** and **objects** programmatically. Ideal for **add-on installers** that need to ensure their schema exists when the add-on starts.
+
+All three methods are **idempotent**: they check whether the entity already exists and only POST if it doesn't. Run them on every startup; nothing happens after the first time.
+
+```csharp
+using NikSBO.Metadata;
+using NikSBO.Enums;
+
+// 1. A User-Defined Table (UDT)
+await client.EnsureUserTableAsync(new UserTableDefinition
+{
+    TableName        = "ROUTES",
+    TableDescription = "Delivery routes",
+    TableType        = UserTableType.MasterData    // see "Type coherence" below
+});
+
+// 2. A User-Defined Field (UDF) on the UDT (or on any SAP standard table)
+await client.EnsureUserFieldAsync(new UserFieldDefinition
+{
+    TableName   = "@ROUTES",                      // for UDTs include the "@"
+    Name        = "DESCRIPTION",                  // the SDK adds the "U_" automatically
+    Description = "Route description",
+    Type        = UserFieldType.Alphanumeric,
+    Size        = 100,
+    Mandatory   = true
+});
+
+// UDFs with a combo (valid values)
+await client.EnsureUserFieldAsync(new UserFieldDefinition
+{
+    TableName   = "OCRD",                          // SAP standard table
+    Name        = "STATUS",
+    Description = "Customer status",
+    Type        = UserFieldType.Alphanumeric,
+    Size        = 1,
+    ValidValues = new List<ValidValue>
+    {
+        new("A", "Active"),
+        new("I", "Inactive"),
+        new("P", "Pending")
+    }
+});
+
+// 3. A User-Defined Object (UDO) on top of the UDT
+await client.EnsureUserObjectAsync(new UserObjectDefinition
+{
+    Code                 = "ROUTE_UDO",
+    Name                 = "Routes",
+    TableName            = "ROUTES",                // UDT base, no "@"
+    ObjectType           = UserObjectType.MasterData,
+    CanCreateDefaultForm = true,
+    CanFind              = true,
+    CanDelete            = true
+});
+```
+
+What gets logged when `LogTrace` is active:
+
+```
+[NikSBO] GET /b1s/v1/UserTablesMD('ROUTES') -> 404 Not Found (12 ms)
+[NikSBO] Creando UserTable 'ROUTES'...
+[NikSBO] POST /b1s/v1/UserTablesMD -> 201 Created (340 ms)
+[NikSBO] UserTable 'ROUTES' creada
+```
+
+A second run of the same code:
+
+```
+[NikSBO] GET /b1s/v1/UserTablesMD('ROUTES') -> 200 OK (8 ms)
+[NikSBO] UserTable 'ROUTES' ya existe, skip
+```
+
+### Type coherence between UDT and UDO
+
+When you put a UDO on top of a UDT, their types **must match**:
+
+| UDT type                       | Compatible UDO type             |
+| ------------------------------ | ------------------------------- |
+| `UserTableType.MasterData`     | `UserObjectType.MasterData`     |
+| `UserTableType.Document`       | `UserObjectType.Document`       |
+| `UserTableType.NoObject`       | None — no UDO on top of these   |
+
+A UDT of type `NoObject` is a standalone user table without any UDO. If you try to create a UDO on top of a `NoObject` UDT, SAP returns `Table '<name>' of type Master Data does not exist`.
+
+### Caveats
+
+- **Permissions:** the SAP user needs Superuser or equivalent metadata-management permissions.
+- **Service Layer cache:** after creating a UDF, the SL might still not "see" the new column for some seconds. SAP recommends a quick re-login if you need to immediately query that field. The SDK can't force this.
+- **Partial rollback on failure:** if you create `UDT + 5 UDFs + UDO` and the UDO POST fails, the previous entities stay in SAP. The `Ensure*` methods are designed to be re-runnable, so the next invocation completes what's left.
+- **Boolean legacy serialization:** `UserObjectsMD` is an old endpoint that uses SAP's internal `BoYesNoEnum` (`"tYES"`/`"tNO"`) for booleans instead of JSON `true`/`false`. The SDK handles this transparently — you keep using `bool?` on the DTO.
+- **Null properties are omitted:** thanks to `JsonIgnoreCondition.WhenWritingNull`, only the properties you explicitly set are sent to SAP. This avoids version-specific issues where some SAP versions don't recognize certain property names.
+
+### Property naming conventions
+
+- **UDTs:** stored in DB with `@` prefix; in the SDK pass the name **without** the `@` (`"ROUTES"`).
+- **UDFs:** stored in DB with `U_` prefix; in the SDK pass the name **without** the `U_` (`"DESCRIPTION"`).
+- **UDFs on a UDT:** when filtering or referencing the parent table, use the `@` form (`"@ROUTES"`).
+- **UDOs on a UDT:** when setting `TableName`, use the **bare** form (no `@`).
+
+---
+
 ## Bundled models
 
 Under `NikSBO.models`:
